@@ -163,6 +163,10 @@ function page({ slug, title, contentHtml, hero }) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title} · NeriTest</title>
   <meta name="description" content="NeriTest - a local sandbox for testing nerimity.js bots." />
+  <link rel="icon" href="favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <script>${THEME_INIT_SCRIPT}</script>
   <link rel="stylesheet" href="styles.css" />
 </head>
