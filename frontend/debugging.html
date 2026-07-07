@@ -98,6 +98,20 @@ the facade doesn&#39;t surface:</p>
 sandbox.store.memberPermissions(serverId, userId);
 sandbox.store.commands;                          // registered bot commands by token
 </code></pre></div>
+<h2>Known SDK bug: patched automatically</h2>
+<p><code>@nerimity/nerimity.js</code> (through at least v1.20.1) has a real bug in <code>Message._update()</code>:
+it updates <code>message.content</code>/<code>message.editedAt</code> but never syncs <code>message.raw</code>, and
+<code>htmlEmbed</code> has no top-level getter at all - it only ever lives on <code>.raw</code>. The upshot,
+unpatched: after any edit, a cached <code>Message</code> object&#39;s <code>raw.htmlEmbed</code>/<code>raw.content</code> stay
+stale forever, even though the <code>messageUpdate</code> event fires at the right time with the
+right data underneath.</p>
+<p>NeriTest patches this - it&#39;s the one deliberate exception to &quot;never monkeypatch the SDK,&quot;
+since it fixes an upstream bug rather than faking sandbox behavior. It&#39;s applied
+automatically the first time you call <code>sandbox.createClient()</code>, <code>sandbox.mount()</code>, or
+<code>sandbox.loadBot()</code> (see <code>BotLoader.patchKnownSdkBugs</code> in <code>src/bot/loader.ts</code>). You don&#39;t
+need to do anything; <code>message.raw.htmlEmbed</code> and <code>message.raw.content</code> will reflect the
+latest edit inside a <code>messageUpdate</code> handler, same as they would if the SDK didn&#39;t have
+the bug.</p>
 <h2>When a bot doesn&#39;t react</h2>
 <ol>
 <li>Did the bot connect and authenticate? <code>sandbox.gateway.connectionCount</code> &gt; 0 and a

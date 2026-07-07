@@ -78,6 +78,23 @@ sandbox.store.memberPermissions(serverId, userId);
 sandbox.store.commands;                          // registered bot commands by token
 ```
 
+## Known SDK bug: patched automatically
+
+`@nerimity/nerimity.js` (through at least v1.20.1) has a real bug in `Message._update()`:
+it updates `message.content`/`message.editedAt` but never syncs `message.raw`, and
+`htmlEmbed` has no top-level getter at all - it only ever lives on `.raw`. The upshot,
+unpatched: after any edit, a cached `Message` object's `raw.htmlEmbed`/`raw.content` stay
+stale forever, even though the `messageUpdate` event fires at the right time with the
+right data underneath.
+
+NeriTest patches this - it's the one deliberate exception to "never monkeypatch the SDK,"
+since it fixes an upstream bug rather than faking sandbox behavior. It's applied
+automatically the first time you call `sandbox.createClient()`, `sandbox.mount()`, or
+`sandbox.loadBot()` (see `BotLoader.patchKnownSdkBugs` in `src/bot/loader.ts`). You don't
+need to do anything; `message.raw.htmlEmbed` and `message.raw.content` will reflect the
+latest edit inside a `messageUpdate` handler, same as they would if the SDK didn't have
+the bug.
+
 ## When a bot doesn't react
 
 1. Did the bot connect and authenticate? `sandbox.gateway.connectionCount` > 0 and a

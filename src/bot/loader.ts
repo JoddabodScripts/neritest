@@ -36,6 +36,10 @@ export interface NerimityModule {
     messageCacheLimit?: number;
   }) => NerimityClientLike;
   Events?: Record<string, string>;
+  Message?: new (...args: unknown[]) => {
+    raw: Record<string, unknown>;
+    content?: string;
+  };
 }
 
 interface ServiceEndpointsModule {
@@ -54,6 +58,7 @@ export interface LoaderTargets {
 export class BotLoader {
   private require = createRequire(path.join(process.cwd(), "index.js"));
   private endpointsPatched = false;
+  private sdkBugsPatched = false;
   private clients = new Set<NerimityClientLike>();
 
   constructor(
@@ -92,6 +97,55 @@ export class BotLoader {
       this.logger.warn(
         "system",
         "could not patch SDK endpoints; use sandbox.createClient() instead",
+        (err as Error).message,
+      );
+    }
+    this.patchKnownSdkBugs();
+  }
+
+  /**
+   * @nerimity/nerimity.js (through at least v1.20.1) has a real bug in
+   * `Message._update()`: it only ever writes `this.content`/`this.editedAt`
+   * and never touches `this.raw`, so a cached `Message` object's
+   * `raw.htmlEmbed`/`raw.content`/`raw.buttons` stay stale forever after an
+   * edit - there's no other public path to a message's htmlEmbed than `.raw`.
+   * Bots correctly receive the `messageUpdate` event at the right time; they
+   * just read wrong (stale) data off it once htmlEmbed is involved.
+   *
+   * We patch `Message.prototype._update` to also sync `raw`, so editing
+   * behaves the way it looks like it should. This is the one deliberate
+   * exception to "never monkeypatch the SDK" - it fixes a upstream bug rather
+   * than faking sandbox behavior, and is narrow/idempotent/logged.
+   */
+  private patchKnownSdkBugs(): void {
+    if (this.sdkBugsPatched) return;
+    try {
+      const mod = this.resolveModule();
+      const MessageCtor = mod.Message;
+      if (!MessageCtor) return;
+      const proto = (MessageCtor as unknown as { prototype: Record<string, unknown> }).prototype;
+      const originalUpdate = proto._update as (
+        this: { raw: Record<string, unknown>; content?: string; editedAt?: number },
+        update: Record<string, unknown>,
+      ) => void;
+      proto._update = function (
+        this: { raw: Record<string, unknown>; content?: string; editedAt?: number },
+        update: Record<string, unknown>,
+      ) {
+        originalUpdate.call(this, update);
+        if (this.raw) {
+          if (update.content !== undefined) this.raw.content = update.content;
+          if (update.htmlEmbed !== undefined) this.raw.htmlEmbed = update.htmlEmbed;
+          if (update.buttons !== undefined) this.raw.buttons = update.buttons;
+          if (update.editedAt !== undefined) this.raw.editedAt = update.editedAt;
+        }
+      };
+      this.sdkBugsPatched = true;
+      this.logger.info("system", "patched nerimity.js Message._update (raw/htmlEmbed staleness bug)");
+    } catch (err) {
+      this.logger.warn(
+        "system",
+        "could not patch nerimity.js Message._update; edited htmlEmbed/buttons may read stale on cached messages",
         (err as Error).message,
       );
     }

@@ -68,6 +68,35 @@ describe("real nerimity.js bot against the sandbox", () => {
     client.off("messageCreate", handler);
   });
 
+  test("editing a message updates the cached Message's raw content and htmlEmbed", async () => {
+    // Regression test for a real bug in @nerimity/nerimity.js's Message._update():
+    // it only writes this.content/this.editedAt and never syncs this.raw, so a
+    // cached Message's raw.htmlEmbed/raw.content go stale forever after an edit.
+    // We patch that in BotLoader.patchKnownSdkBugs(); this proves the patch holds.
+    const server = sandbox.createServer({ name: "Edit Server" });
+    const channel = server.createChannel({ name: "edits" });
+    server.addMember(sandbox.bot);
+    await waitFor(() => client.channels.cache.get(channel.id));
+
+    let updatedRawContent: string | undefined;
+    let updatedRawHtml: string | undefined;
+    const handler = (message: any) => {
+      if (message.channelId !== channel.id) return;
+      updatedRawContent = message.raw.content;
+      updatedRawHtml = message.raw.htmlEmbed;
+    };
+    client.on("messageUpdate", handler);
+
+    const nerimityChannel = client.channels.cache.get(channel.id);
+    const sent = await nerimityChannel.send("original");
+    await sent.edit("edited", { htmlEmbed: "<b>edited embed</b>" });
+
+    await waitFor(() => updatedRawContent === "edited");
+    assert.equal(updatedRawContent, "edited");
+    assert.equal(updatedRawHtml, "<b>edited embed</b>");
+    client.off("messageUpdate", handler);
+  });
+
   test("reactions fire messageReactionAdded with the reacting user", async () => {
     const server = sandbox.createServer({ name: "React Server" });
     const channel = server.createChannel({ name: "react" });
