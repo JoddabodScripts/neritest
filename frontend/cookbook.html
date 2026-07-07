@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Testing cookbook · NeriTest</title>
+  <meta name="description" content="NeriTest - a local sandbox for testing nerimity.js bots." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">≡</button>
+    <a class="brand" href="index.html">Neri<span class="mark">Test</span></a>
+    <div class="top-links">
+      <a href="getting-started.html">Docs</a>
+      <a href="cookbook.html">Cookbook</a>
+      <a href="https://github.com/Nerimity/nerimity.js">SDK</a>
+    </div>
+  </div>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <div class="nav-title">Documentation</div>
+        <ul class="nav">
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a class="active" href="cookbook.html">Cookbook</a></li>
+        <li><a href="api-reference.html">API reference</a></li>
+        <li><a href="fixtures.html">Fixtures</a></li>
+        <li><a href="debugging.html">Debugging</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="migration.html">Migration</a></li>
+        <li><a href="examples.html">Examples</a></li>
+      </ul>
+      </nav>
+    </aside>
+    <main id="content">
+      
+      <article class="doc">
+        <h1>Testing cookbook</h1>
+<p>Recipes for common bot patterns. All of these are exercised by the runnable
+<a href="../examples/bots.test.ts"><code>examples/bots.test.ts</code></a> and
+<a href="../test/integration"><code>test/integration</code></a> suites.</p>
+<p>A small helper used throughout:</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const waitFor = async (fn: () =&gt; unknown, timeout = 3000) =&gt; {
+  const start = Date.now();
+  while (!fn()) {
+    if (Date.now() - start &gt; timeout) throw new Error(&quot;timed out&quot;);
+    await new Promise((r) =&gt; setTimeout(r, 10));
+  }
+};
+const ready = (c: any) =&gt; new Promise((r) =&gt; c.on(&quot;ready&quot;, r));
+const syncServer = (c: any, id: string) =&gt; waitFor(() =&gt; c.servers.cache.get(id));
+</code></pre></div>
+<h2>Ping / pong and edits</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>channel.send(alice, &quot;!ping&quot;);
+await waitFor(() =&gt; channel.lastMessage?.content?.startsWith(&quot;Pong!&quot;));
+</code></pre></div>
+<h2>HTML content</h2>
+<p>Nerimity&#39;s HTML support is the message&#39;s <code>htmlEmbed</code> field, distinct from plain <code>content</code>.</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>channel.send(bob, { content: &quot;hi&quot;, html: &quot;&lt;b&gt;Hello!&lt;/b&gt;&quot; });
+client.on(&quot;messageCreate&quot;, (m: any) =&gt; {
+  m.content;         // &quot;hi&quot;
+  m.raw.htmlEmbed;   // &quot;&lt;b&gt;Hello!&lt;/b&gt;&quot;
+});
+// assert with the HTML matcher:
+expect(channel.lastMessage?.htmlEmbed).toContainHtml(&quot;&lt;b&gt;&quot;);
+</code></pre></div>
+<h2>Reactions</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const msg = channel.send(alice, &quot;vote!&quot;);
+msg.react(bob, &quot;thumbsup&quot;);
+client.on(&quot;messageReactionAdded&quot;, (reaction, user) =&gt; {
+  reaction.name; // &quot;thumbsup&quot;
+  user?.id;      // bob.id
+});
+</code></pre></div>
+<h2>Buttons and modals</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const msg = channel.send(alice, { content: &quot;click&quot;, buttons: [{ id: &quot;hi&quot;, label: &quot;Hi&quot; }] });
+msg.clickButton(alice, &quot;hi&quot;);
+client.on(&quot;messageButtonClick&quot;, async (button) =&gt; {
+  if (button.id === &quot;hi&quot;) await button.respond({ title: &quot;Hey&quot;, content: `Hi ${button.user?.username}!` });
+});
+</code></pre></div>
+<h2>Moderation with permission enforcement</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const server = sandbox.createServer({ name: &quot;Guild&quot;, owner, botPermissions: permissions(&quot;BAN&quot;) });
+const sdkServer = await syncServer(client, server.id);
+await sdkServer.banMember(troll.id, { reason: &quot;spam&quot; });
+expect(server.isBanned(troll)).toBe(true);
+expect(troll.wasBanned(server)).toBe(true);
+</code></pre></div>
+<p>Give the bot no permission and assert the failure path:</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const server = sandbox.createServer({ name: &quot;Locked&quot;, owner, botPermissions: 0 });
+const sdkServer = await syncServer(client, server.id);
+await expect(sdkServer.banMember(victim.id)).rejects.toThrow(/not allowed to ban/);
+</code></pre></div>
+<h2>Automod (delete + warn)</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const bad = channel.send(spammer, &quot;buy cheap followers at spamlink.example&quot;);
+await waitFor(() =&gt; bad.deleted);
+expect(bad.deleted).toBe(true);
+</code></pre></div>
+<h2>Reaction roles</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>attachReactionRoles(client, {
+  messageId: pinned.id,
+  map: { gamepad: gamerRoleId },
+  onAssign: (userId, roleId) =&gt; server.giveRole(sandbox.user(userId)!, roleId),
+});
+pinned.react(alice, &quot;gamepad&quot;);
+await waitFor(() =&gt; server.member(alice)?.hasRole(gamerRoleId));
+</code></pre></div>
+<h2>Cooldowns and scheduled jobs (virtual time)</h2>
+<p>Inject the sandbox clock so you can fast-forward instead of waiting:</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>attachEconomy(client, { now: () =&gt; sandbox.now() });
+
+channel.send(user, &quot;!daily&quot;);
+await waitFor(() =&gt; channel.lastMessage?.content?.includes(&quot;claimed 100&quot;));
+channel.send(user, &quot;!daily&quot;);
+await waitFor(() =&gt; channel.lastMessage?.content?.includes(&quot;Already claimed&quot;));
+
+sandbox.advanceTime(&quot;24h&quot;);          // no real waiting
+channel.send(user, &quot;!daily&quot;);
+await waitFor(() =&gt; channel.lastMessage?.content?.includes(&quot;Balance: 200&quot;));
+</code></pre></div>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>attachReminder(client, { schedule: (cb, ms) =&gt; sandbox.clock.setTimeout(cb, ms) });
+channel.send(user, &quot;!remind 60 water the plants&quot;);
+sandbox.advanceTime(&quot;60s&quot;);
+await waitFor(() =&gt; channel.lastMessage?.content?.includes(&quot;water the plants&quot;));
+</code></pre></div>
+<h2>Rate limits, failures, latency</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>sandbox.api.rateLimit({ requests: 1, retryAfterMs: 1000 });
+await expect(sdkChannel.send(&quot;hi&quot;)).rejects.toThrow(/rate limited/i);
+await sdkChannel.send(&quot;ok&quot;); // succeeds - one-shot
+
+sandbox.api.failNext(400, { message: &quot;Custom validation error.&quot; });
+await expect(sdkChannel.send(&quot;x&quot;)).rejects.toThrow(/Custom validation/);
+
+sandbox.api.setLatency(200);   // every REST call now takes ≥200ms
+sandbox.api.hangNext(5000);    // next call hangs 5s (test your timeouts)
+</code></pre></div>
+<h2>Gateway faults and reconnection</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>sandbox.gateway.setLatency(50);          // add ws latency
+sandbox.gateway.setPacketLoss(0.1);      // drop 10% of packets
+sandbox.gateway.setDuplication(0.05);    // duplicate 5%
+sandbox.gateway.rejectNextAuth();        // fail the next authenticate
+sandbox.gateway.disconnect();            // drop all sockets; the SDK reconnects
+</code></pre></div>
+<h2>Slash commands</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>await register(client, sandbox.token);   // POST /applications/bot/commands
+// the SDK parses &quot;/help:botId 2&quot; into message.command = { name: &quot;help&quot;, args: [&quot;2&quot;] }
+</code></pre></div>
+<h2>Performance / load</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const { server, users, channels } = sandbox.loadFixture(&quot;large-server&quot;);
+// 200 users, 25 channels, ~1000 messages by default - tune via a custom builder.
+</code></pre></div>
+
+      </article>
+      <footer class="foot">
+        <span>NeriTest docs</span>
+        <span>Built from the project markdown. Orange, as requested.</span>
+      </footer>
+    </main>
+  </div>
+  <script>
+    document.getElementById("menuToggle")?.addEventListener("click", () => {
+      document.getElementById("sidebar")?.classList.toggle("open");
+    });
+    document.querySelectorAll(".copy").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const code = btn.closest(".code-block")?.querySelector("code")?.innerText ?? "";
+        try {
+          await navigator.clipboard.writeText(code);
+          btn.textContent = "Copied";
+          setTimeout(() => (btn.textContent = "Copy"), 1400);
+        } catch {
+          btn.textContent = "Copy failed";
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Overview · NeriTest</title>
+  <meta name="description" content="NeriTest - a local sandbox for testing nerimity.js bots." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">≡</button>
+    <a class="brand" href="index.html">Neri<span class="mark">Test</span></a>
+    <div class="top-links">
+      <a href="getting-started.html">Docs</a>
+      <a href="cookbook.html">Cookbook</a>
+      <a href="https://github.com/Nerimity/nerimity.js">SDK</a>
+    </div>
+  </div>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <div class="nav-title">Documentation</div>
+        <ul class="nav">
+        <li><a class="active" href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="cookbook.html">Cookbook</a></li>
+        <li><a href="api-reference.html">API reference</a></li>
+        <li><a href="fixtures.html">Fixtures</a></li>
+        <li><a href="debugging.html">Debugging</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="migration.html">Migration</a></li>
+        <li><a href="examples.html">Examples</a></li>
+      </ul>
+      </nav>
+    </aside>
+    <main id="content">
+      <header class="hero">
+    <div class="hero-inner">
+      <div class="badge">testing toolkit</div>
+      <h1>Neri<span class="mark">Test</span></h1>
+      <p class="lede">A local sandbox that emulates the Nerimity runtime, so you can build and
+        test <code>nerimity.js</code> bots against a real gateway and REST API without ever
+        touching production.</p>
+      <div class="cta-row">
+        <a class="btn primary" href="getting-started.html">Get started</a>
+        <a class="btn ghost" href="cookbook.html">Cookbook</a>
+        <a class="btn ghost" href="https://github.com/Nerimity/nerimity.js">nerimity.js</a>
+      </div>
+      <div class="hero-term" aria-hidden="true">
+        <div class="term-bar"><span></span><span></span><span></span></div>
+        <pre><code><span class="c-key">const</span> sandbox = <span class="c-fn">createSandbox</span>();
+<span class="c-key">const</span> channel = server.<span class="c-fn">createChannel</span>({ name: <span class="c-str">"general"</span> });
+
+<span class="c-cmt">// a real nerimity.js Client, wired to the sandbox</span>
+<span class="c-key">const</span> client = <span class="c-key">await</span> sandbox.<span class="c-fn">createClient</span>();
+channel.<span class="c-fn">send</span>(alice, <span class="c-str">"!ping"</span>);
+
+<span class="c-fn">expect</span>(channel.lastMessage?.content).<span class="c-fn">toBe</span>(<span class="c-str">"Pong!"</span>);</code></pre>
+      </div>
+    </div>
+  </header>
+      <article class="doc doc-index">
+        <h2>Why this approach</h2>
+<p>nerimity.js talks to the outside world two ways, both redirectable:</p>
+<ul>
+<li><strong>Gateway</strong> - <code>socket.io-client</code> → overridable via <code>new Client({ wsUrlOverride })</code></li>
+<li><strong>REST</strong> - <code>fetch</code> → overridable via <code>apiUrlOverride</code></li>
+</ul>
+<p>Rather than monkeypatch the SDK (fragile, drifts from reality), NeriTest stands up real
+servers speaking the exact protocol and lets the unmodified SDK connect. Three hosts the
+SDK hardcodes (<code>cdn.nerimity.com</code>, <code>nerimity.com/api/webhooks</code>, RPC) are handled by a
+narrow global <code>fetch</code> shim.</p>
+<hr>
+<h2>Install</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">Shell</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>npm install --save-dev neritest-js
+# your bot brings its own SDK:
+npm install @nerimity/nerimity.js
+</code></pre></div>
+<p>Requires Node 18+. Ships ESM + CommonJS + TypeScript types.</p>
+<hr>
+<h2>Quickstart</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>import { createSandbox, expect } from &quot;neritest-js&quot;;
+
+const sandbox = createSandbox();
+
+const server = sandbox.createServer({ name: &quot;Development&quot; });
+const channel = server.createChannel({ name: &quot;general&quot; });
+const alice = sandbox.createUser({ username: &quot;Alice&quot; });
+
+// A real nerimity.js Client, wired to the sandbox:
+const client = await sandbox.createClient();
+
+client.on(&quot;messageCreate&quot;, async (message) =&gt; {
+  if (message.user.id === client.user.id) return;
+  if (message.content === &quot;!ping&quot;) await message.reply(&quot;Pong!&quot;);
+});
+
+// Wait for the bot to connect, then have Alice send a message:
+await new Promise((r) =&gt; client.on(&quot;ready&quot;, r));
+channel.send(alice, &quot;!ping&quot;);
+
+// ...the bot replies over the real REST API; assert on the result:
+// expect(channel.lastMessage?.content).toBe(&quot;Pong!&quot;);
+
+await sandbox.close();
+</code></pre></div>
+<h2>Three ways to run your bot</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Bot changes</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>await sandbox.createClient()</code></td>
+<td>one line (<code>new Client()</code> → this)</td>
+<td>most tests</td>
+</tr>
+<tr>
+<td><code>await sandbox.mount(client)</code></td>
+<td>none, you pass the client</td>
+<td>you already built a client</td>
+</tr>
+<tr>
+<td><code>await sandbox.loadBot(&quot;./bot.ts&quot;)</code></td>
+<td><strong>zero</strong></td>
+<td>run an entire unmodified bot file</td>
+</tr>
+</tbody></table></div>
+<p><code>loadBot</code> patches the SDK&#39;s endpoints before importing your bot, so a vanilla
+<code>new Client(); client.login(&quot;token&quot;)</code> connects straight to the sandbox.</p>
+<hr>
+<h2>What&#39;s emulated</h2>
+<ul>
+<li><strong>Every client event</strong>: <code>ready</code>, <code>messageCreate</code>/<code>Update</code>/<code>Delete</code>,
+<code>messageReactionAdded</code>/<code>Removed</code>, <code>serverMemberJoined</code>/<code>Left</code>/<code>Updated</code>,
+<code>serverJoined</code>/<code>Left</code>, <code>messageButtonClick</code>, <code>serverChannelCreated</code>/<code>Updated</code>/<code>Deleted</code>,
+<code>serverRoleCreated</code>/<code>Updated</code>/<code>Deleted</code>/<code>OrderUpdated</code>.</li>
+<li><strong>The gateway handshake</strong> - <code>user:authenticate</code> → <code>user:authenticated</code> with the exact
+payload shape the SDK parses.</li>
+<li><strong>The REST API</strong> - send/edit/delete messages, ban/kick, posts, bot commands, button
+callbacks, webhooks. Faithful success <strong>and</strong> error/permission responses.</li>
+<li><strong>Message content</strong> - plain text, <strong>HTML</strong> (<code>htmlEmbed</code>), embeds, attachments, buttons,
+reactions, mentions (<code>[@:id]</code>), replies/quotes, silent, edits, deletes, system messages.</li>
+<li><strong>Permissions</strong> - the same 9-bit field and the same <code>hasPermission</code> math (admin + creator
+bypass) the SDK uses, so a <code>403</code> here lines up with a <code>403</code> in production.</li>
+<li><strong>Fault injection</strong> - latency, packet loss, duplicate packets, forced disconnects,
+rate limits, forced failures, request hangs.</li>
+<li><strong>Virtual time</strong> - fast-forward cooldowns, reminders and scheduled jobs with
+<code>sandbox.advanceTime(&quot;24h&quot;)</code>; no real waiting.</li>
+<li><strong>Record / replay</strong>, <strong>fixtures</strong>, <strong>structured logging</strong>, and a <strong>live debugger</strong>.</li>
+</ul>
+<p>See <a href="architecture.html">docs/architecture.md</a> for the full audit of what was mirrored.</p>
+<hr>
+<h2>Documentation</h2>
+<ul>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="api-reference.html">API reference</a></li>
+<li><a href="cookbook.html">Testing cookbook</a> - recipes for moderation, automod, welcome,
+economy, reaction-roles, scheduled jobs, permissions, fault injection</li>
+<li><a href="fixtures.html">Fixtures guide</a></li>
+<li><a href="debugging.html">Debugging guide</a></li>
+<li><a href="architecture.html">Architecture</a></li>
+<li><a href="migration.html">Migration guide</a></li>
+<li>Runnable <a href="examples.html">examples</a> - real bots plus their tests</li>
+</ul>
+<hr>
+<h2>A moderation test, end to end</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>import { createSandbox, permissions, RolePermissions } from &quot;neritest-js&quot;;
+
+const sandbox = createSandbox();
+const owner = sandbox.createUser({ username: &quot;Owner&quot; });
+const server = sandbox.createServer({ name: &quot;Guild&quot;, owner, botPermissions: permissions(&quot;BAN&quot;) });
+const troll = sandbox.createUser({ username: &quot;Troll&quot; });
+server.addMember(troll);
+
+const client = await sandbox.createClient();
+await new Promise((r) =&gt; client.on(&quot;ready&quot;, r));
+
+// wait for the bot to receive the server, then ban via the SDK:
+const sdkServer = client.servers.cache.get(server.id);
+await sdkServer.banMember(troll.id, { reason: &quot;spam&quot; });
+
+console.log(server.isBanned(troll)); // true
+console.log(troll.wasBanned(server)); // true
+await sandbox.close();
+</code></pre></div>
+<p>Take away the bot&#39;s <code>BAN</code> permission (<code>botPermissions: 0</code>) and the same call rejects with
+the real &quot;You are not allowed to ban members.&quot; error.</p>
+<hr>
+<h2>Status</h2>
+<p>The core - gateway, REST API, data model, event emulation, permissions, HTML, fault
+injection, virtual time, record/replay, fixtures, assertions, logging, debugger - is
+implemented and covered by a passing test suite that drives the <strong>real</strong> nerimity.js SDK.
+See <a href="architecture.html#known-limitations">docs/architecture.md</a> for known limitations.</p>
+<h2>License</h2>
+<p>MIT</p>
+
+      </article>
+      <footer class="foot">
+        <span>NeriTest docs</span>
+        <span>Built from the project markdown. Orange, as requested.</span>
+      </footer>
+    </main>
+  </div>
+  <script>
+    document.getElementById("menuToggle")?.addEventListener("click", () => {
+      document.getElementById("sidebar")?.classList.toggle("open");
+    });
+    document.querySelectorAll(".copy").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const code = btn.closest(".code-block")?.querySelector("code")?.innerText ?? "";
+        try {
+          await navigator.clipboard.writeText(code);
+          btn.textContent = "Copied";
+          setTimeout(() => (btn.textContent = "Copy"), 1400);
+        } catch {
+          btn.textContent = "Copy failed";
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Examples · NeriTest</title>
+  <meta name="description" content="NeriTest - a local sandbox for testing nerimity.js bots." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">≡</button>
+    <a class="brand" href="index.html">Neri<span class="mark">Test</span></a>
+    <div class="top-links">
+      <a href="getting-started.html">Docs</a>
+      <a href="cookbook.html">Cookbook</a>
+      <a href="https://github.com/Nerimity/nerimity.js">SDK</a>
+    </div>
+  </div>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <div class="nav-title">Documentation</div>
+        <ul class="nav">
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="cookbook.html">Cookbook</a></li>
+        <li><a href="api-reference.html">API reference</a></li>
+        <li><a href="fixtures.html">Fixtures</a></li>
+        <li><a href="debugging.html">Debugging</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="migration.html">Migration</a></li>
+        <li><a class="active" href="examples.html">Examples</a></li>
+      </ul>
+      </nav>
+    </aside>
+    <main id="content">
+      
+      <article class="doc">
+        <h1>Examples</h1>
+<p>Each bot in <a href="bots"><code>bots/</code></a> is written the way you&#39;d write it for production: an <code>attach(client)</code>
+factory that wires handlers to a real nerimity.js <code>Client</code>. The same code runs in the sandbox
+(<code>attach(await sandbox.createClient())</code>) and against a live server (<code>attach(new Client())</code>).</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Pattern</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="bots/ping-pong.ts"><code>bots/ping-pong.ts</code></a></td>
+<td>reply + edit, latency</td>
+</tr>
+<tr>
+<td><a href="bots/welcome.ts"><code>bots/welcome.ts</code></a></td>
+<td><code>serverMemberJoined</code>, HTML greeting</td>
+</tr>
+<tr>
+<td><a href="bots/moderation.ts"><code>bots/moderation.ts</code></a></td>
+<td>permission checks, ban/kick, error handling</td>
+</tr>
+<tr>
+<td><a href="bots/automod.ts"><code>bots/automod.ts</code></a></td>
+<td>delete + warn on banned words</td>
+</tr>
+<tr>
+<td><a href="bots/reaction-roles.ts"><code>bots/reaction-roles.ts</code></a></td>
+<td><code>messageReactionAdded</code> → assign role</td>
+</tr>
+<tr>
+<td><a href="bots/economy.ts"><code>bots/economy.ts</code></a></td>
+<td>cooldowns via an injected clock (virtual time)</td>
+</tr>
+<tr>
+<td><a href="bots/reminder.ts"><code>bots/reminder.ts</code></a></td>
+<td>scheduled jobs via an injected scheduler</td>
+</tr>
+<tr>
+<td><a href="bots/slash-commands.ts"><code>bots/slash-commands.ts</code></a></td>
+<td><code>message.command</code>, command registration</td>
+</tr>
+<tr>
+<td><a href="bots/logging.ts"><code>bots/logging.ts</code></a></td>
+<td><code>messageUpdate</code> / <code>messageDelete</code> mirroring</td>
+</tr>
+</tbody></table></div>
+<p><a href="standalone/vanilla-bot.cjs"><code>standalone/vanilla-bot.cjs</code></a> is a completely unmodified bot with
+no NeriTest imports, run via <code>sandbox.loadBot(...)</code>.</p>
+<p><a href="bots.test.ts"><code>bots.test.ts</code></a> exercises all of the above in the sandbox - read it as a worked
+cookbook. Run everything with:</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">Shell</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>npm test
+</code></pre></div>
+
+      </article>
+      <footer class="foot">
+        <span>NeriTest docs</span>
+        <span>Built from the project markdown. Orange, as requested.</span>
+      </footer>
+    </main>
+  </div>
+  <script>
+    document.getElementById("menuToggle")?.addEventListener("click", () => {
+      document.getElementById("sidebar")?.classList.toggle("open");
+    });
+    document.querySelectorAll(".copy").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const code = btn.closest(".code-block")?.querySelector("code")?.innerText ?? "";
+        try {
+          await navigator.clipboard.writeText(code);
+          btn.textContent = "Copied";
+          setTimeout(() => (btn.textContent = "Copy"), 1400);
+        } catch {
+          btn.textContent = "Copy failed";
+        }
+      });
+    });
+  </script>
+</body>
+</html>

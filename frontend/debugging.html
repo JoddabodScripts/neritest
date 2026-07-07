@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Debugging · NeriTest</title>
+  <meta name="description" content="NeriTest - a local sandbox for testing nerimity.js bots." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">≡</button>
+    <a class="brand" href="index.html">Neri<span class="mark">Test</span></a>
+    <div class="top-links">
+      <a href="getting-started.html">Docs</a>
+      <a href="cookbook.html">Cookbook</a>
+      <a href="https://github.com/Nerimity/nerimity.js">SDK</a>
+    </div>
+  </div>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <div class="nav-title">Documentation</div>
+        <ul class="nav">
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="cookbook.html">Cookbook</a></li>
+        <li><a href="api-reference.html">API reference</a></li>
+        <li><a href="fixtures.html">Fixtures</a></li>
+        <li><a class="active" href="debugging.html">Debugging</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="migration.html">Migration</a></li>
+        <li><a href="examples.html">Examples</a></li>
+      </ul>
+      </nav>
+    </aside>
+    <main id="content">
+      
+      <article class="doc">
+        <h1>Debugging</h1>
+<h2>Live logs</h2>
+<p>Every subsystem logs through one structured, filterable stream. Turn it on:</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const sandbox = createSandbox({ logging: { console: true } });
+</code></pre></div>
+<p>Categories: <code>api</code>, <code>ws</code>, <code>gateway</code>, <code>event</code>, <code>permission</code>, <code>timing</code>, <code>system</code>. Filter to
+just what you care about:</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const sandbox = createSandbox({
+  logging: { console: true, categories: [&quot;api&quot;, &quot;permission&quot;], level: &quot;info&quot; },
+});
+</code></pre></div>
+<p>Or subscribe programmatically (this is how the debugger and recorder work):</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const off = sandbox.logs.onLog((entry) =&gt; {
+  if (entry.category === &quot;permission&quot;) console.log(&quot;PERM:&quot;, entry.message, entry.data);
+});
+// ...later
+off();
+</code></pre></div>
+<p>Snapshot retained entries after the fact:</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const perm403s = sandbox.logs.entries({ category: &quot;permission&quot; });
+</code></pre></div>
+<h2>The live debugger</h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>sandbox.debug.attach();              // stream all activity to the console
+sandbox.debug.attach({ filter: [&quot;ws&quot;, &quot;api&quot;] });
+
+sandbox.debug.renderState();         // print the whole world as a tree
+const snap = sandbox.debug.snapshot(); // structured state for a custom UI
+</code></pre></div>
+<p><code>renderState()</code> prints users (bots marked ◆), servers, their roles, members, and per-channel
+message counts. <code>snapshot()</code> returns the same data as <code>DebuggerSnapshot</code> so you can render it
+however you like - a web dashboard, a TUI, a CI artifact.</p>
+<h2>Record &amp; replay</h2>
+<p>Capture a session and turn a bug into a regression test:</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const rec = sandbox.record();
+// ...drive the scenario...
+rec.save(&quot;session.json&quot;);
+</code></pre></div>
+<p>Replay the exact server→client packet sequence into a fresh bot:</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>const sandbox = createSandbox();
+const client = await sandbox.createClient();
+await new Promise((r) =&gt; client.on(&quot;ready&quot;, r));
+await sandbox.replay(&quot;session.json&quot;);            // back-to-back
+await sandbox.replay(&quot;session.json&quot;, { realtime: true, speed: 2 }); // honour timing, 2× faster
+</code></pre></div>
+<h2>Inspecting raw state</h2>
+<p><code>sandbox.store</code> is the escape hatch to canonical state when you need to assert on something
+the facade doesn&#39;t surface:</p>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>sandbox.store.messagesForChannel(channel.id);   // RawMessage[]
+sandbox.store.memberPermissions(serverId, userId);
+sandbox.store.commands;                          // registered bot commands by token
+</code></pre></div>
+<h2>When a bot doesn&#39;t react</h2>
+<ol>
+<li>Did the bot connect and authenticate? <code>sandbox.gateway.connectionCount</code> &gt; 0 and a
+<code>ready</code> event.</li>
+<li>Was it created after the server? Wait for the SDK cache
+(<code>waitFor(() =&gt; client.servers.cache.get(serverId))</code>).</li>
+<li>Is the bot a member of that server? Only members receive server events.</li>
+<li>Turn on <code>logging: { console: true }</code> and watch the <code>ws</code> and <code>event</code> categories.</li>
+</ol>
+
+      </article>
+      <footer class="foot">
+        <span>NeriTest docs</span>
+        <span>Built from the project markdown. Orange, as requested.</span>
+      </footer>
+    </main>
+  </div>
+  <script>
+    document.getElementById("menuToggle")?.addEventListener("click", () => {
+      document.getElementById("sidebar")?.classList.toggle("open");
+    });
+    document.querySelectorAll(".copy").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const code = btn.closest(".code-block")?.querySelector("code")?.innerText ?? "";
+        try {
+          await navigator.clipboard.writeText(code);
+          btn.textContent = "Copied";
+          setTimeout(() => (btn.textContent = "Copy"), 1400);
+        } catch {
+          btn.textContent = "Copy failed";
+        }
+      });
+    });
+  </script>
+</body>
+</html>

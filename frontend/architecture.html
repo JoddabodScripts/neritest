@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Architecture · NeriTest</title>
+  <meta name="description" content="NeriTest - a local sandbox for testing nerimity.js bots." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">≡</button>
+    <a class="brand" href="index.html">Neri<span class="mark">Test</span></a>
+    <div class="top-links">
+      <a href="getting-started.html">Docs</a>
+      <a href="cookbook.html">Cookbook</a>
+      <a href="https://github.com/Nerimity/nerimity.js">SDK</a>
+    </div>
+  </div>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <div class="nav-title">Documentation</div>
+        <ul class="nav">
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="cookbook.html">Cookbook</a></li>
+        <li><a href="api-reference.html">API reference</a></li>
+        <li><a href="fixtures.html">Fixtures</a></li>
+        <li><a href="debugging.html">Debugging</a></li>
+        <li><a class="active" href="architecture.html">Architecture</a></li>
+        <li><a href="migration.html">Migration</a></li>
+        <li><a href="examples.html">Examples</a></li>
+      </ul>
+      </nav>
+    </aside>
+    <main id="content">
+      
+      <article class="doc">
+        <h1>Architecture</h1>
+<p>NeriTest is one package, internally modular. It does not fake the SDK; it stands up real
+servers and lets the real SDK connect.</p>
+<div class="code-block"><div class="code-head"><span class="code-lang"></span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>                    ┌──────────────────────────────────────────────┐
+                    │                  Sandbox                     │
+                    │  (orchestrator: clock, ids, wiring, teardown) │
+                    └──────────────────────────────────────────────┘
+                        │              │                 │
+        world-side ─────┤              │                 ├───── bot-side
+   (test author drives) │              │                 │  (real nerimity.js)
+                        ▼              ▼                 ▼
+                 ┌───────────┐   ┌───────────┐    ┌──────────────┐
+                 │  Facade   │   │   Store   │    │  BotLoader   │
+                 │ Sandbox*  │──▶│  (state,  │◀───│ createClient │
+                 │ objects   │   │  events)  │    │ mount/loadBot│
+                 └───────────┘   └─────┬─────┘    └──────┬───────┘
+                                       │ domain events   │ wires overrides
+                          ┌────────────┴───────────┐     │
+                          ▼                        ▼     ▼
+                   ┌─────────────┐          ┌──────────────────┐
+                   │  Gateway    │          │    ApiServer     │
+                   │ (socket.io) │          │   (express)      │
+                   └──────┬──────┘          └────────┬─────────┘
+                          │ ws packets               │ HTTP
+                          └───────────┬──────────────┘
+                                      ▼
+                          ┌────────────────────────┐
+                          │  real @nerimity/*.js    │
+                          │        Client           │
+                          └────────────────────────┘
+</code></pre></div>
+<h2>Modules</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>src/model/store.ts</code></td>
+<td>Single source of truth. Holds all state as <code>Raw*</code> payloads; mutations emit typed domain events.</td>
+</tr>
+<tr>
+<td><code>src/model/rawTypes.ts</code></td>
+<td>Wire payload shapes mirrored 1:1 from the SDK&#39;s <code>RawData.ts</code>.</td>
+</tr>
+<tr>
+<td><code>src/model/enums.ts</code>, <code>permissions.ts</code></td>
+<td><code>MessageType</code>, <code>ChannelType</code>, and the permission bitfield, mirrored from the SDK.</td>
+</tr>
+<tr>
+<td><code>src/gateway/</code></td>
+<td>Real socket.io server: auth handshake, event routing, fault injection.</td>
+</tr>
+<tr>
+<td><code>src/api/</code></td>
+<td>Real express server: every REST endpoint, faithful success/error bodies, fault injection.</td>
+</tr>
+<tr>
+<td><code>src/facade.ts</code></td>
+<td>Fluent &quot;world&quot; API (<code>SandboxServer</code>/<code>Channel</code>/<code>User</code>/<code>Message</code>/…).</td>
+</tr>
+<tr>
+<td><code>src/bot/</code></td>
+<td><code>createClient</code> / <code>mount</code> / <code>loadBot</code>, plus the CDN/webhook fetch shim.</td>
+</tr>
+<tr>
+<td><code>src/time/clock.ts</code></td>
+<td>Virtual clock and timers for <code>advanceTime</code>.</td>
+</tr>
+<tr>
+<td><code>src/recorder/</code></td>
+<td>Record / replay of gateway + API traffic.</td>
+</tr>
+<tr>
+<td><code>src/logging/</code>, <code>src/debugger/</code></td>
+<td>Structured filterable logs and a live debugger.</td>
+</tr>
+<tr>
+<td><code>src/fixtures/</code></td>
+<td>Reusable state builders.</td>
+</tr>
+<tr>
+<td><code>src/assertions/</code></td>
+<td>A small Jest-shaped <code>expect</code>.</td>
+</tr>
+</tbody></table></div>
+<h2>Data flow</h2>
+<p><strong>World → bot.</strong> The test author calls a facade method (e.g. <code>channel.send(alice, &quot;!ping&quot;)</code>).
+The facade mutates the <code>Store</code>, which emits a domain event (<code>messageCreated</code>). The <code>Gateway</code>
+forwards it to the sockets that should see it (server members / DM participants) as the real
+<code>message:created</code> packet. The SDK parses it and fires <code>messageCreate</code>.</p>
+<p><strong>Bot → world.</strong> The bot calls the SDK (e.g. <code>message.reply(&quot;Pong!&quot;)</code>), which does a real
+<code>fetch</code> to the <code>ApiServer</code>. The handler checks permissions, mutates the <code>Store</code>, and returns
+the exact <code>Raw*</code> body the SDK expects. The store mutation also emits <code>messageCreated</code>, which
+the gateway delivers back to the bot (the SDK does not dedupe its own messages - faithful to
+production, which is why bots guard with <code>if (message.user.id === client.user.id) return</code>).</p>
+<h2>The audit this was built from</h2>
+<p>Everything mirrored was discovered by reading <code>~/nrepos/nerimity.js</code> (the SDK) and verified
+against <code>~/nrepos/nerimity-server</code> (the real server). Highlights:</p>
+<ul>
+<li><strong>Client events</strong> (<code>ClientEventMap</code>): <code>ready</code>, <code>messageCreate</code>, <code>messageUpdate</code>,
+<code>messageDelete</code>, <code>messageReactionAdded</code>, <code>messageReactionRemoved</code>, <code>serverMemberLeft</code>,
+<code>serverMemberJoined</code>, <code>serverMemberUpdated</code>, <code>serverJoined</code>, <code>serverLeft</code>,
+<code>messageButtonClick</code>, <code>serverChannelCreated</code>, <code>serverChannelUpdated</code>,
+<code>serverChannelDeleted</code>, <code>serverRoleCreated</code>, <code>serverRoleDeleted</code>, <code>serverRoleUpdated</code>,
+<code>serverRoleOrderUpdated</code>.</li>
+<li><strong>Gateway events</strong> (server→client): the full set from the server&#39;s <code>ClientEventNames.ts</code>,
+including ones the current SDK does not yet surface (<code>channel:typing</code>,
+<code>user:presence_update</code>, <code>voice:*</code>) - NeriTest can emit them for forward compatibility.</li>
+<li><strong>Client→server</strong>: <code>user:authenticate</code>, <code>user:update_activity</code>, <code>notification:dismiss</code>.</li>
+<li><strong>REST endpoints</strong> used by the SDK: <code>GET/POST /channels/:id/messages</code>,
+<code>GET/PATCH/DELETE /channels/:id/messages/:mid</code>, button callback,
+<code>POST/DELETE /servers/:id/bans/:uid</code>, <code>DELETE /servers/:id/members/:uid/kick</code>,
+<code>GET/POST/PATCH/DELETE /posts</code>, <code>POST /applications/bot/commands</code>, <code>POST /webhooks/:id/:token</code>.</li>
+<li><strong>Models</strong>: <code>RawUser</code>, <code>RawServer</code>, <code>RawServerRole</code>, <code>RawServerMember</code>, <code>RawChannel</code>,
+<code>RawMessage</code> (incl. <code>htmlEmbed</code>, <code>embed</code>, <code>buttons</code>, <code>reactions</code>, <code>mentions</code>,
+<code>replyMessages</code>, <code>quotedMessages</code>), <code>RawAttachment</code>, <code>RawEmbed</code>, <code>RawMessageButton</code>,
+<code>RawMessageReaction</code>, <code>RawBotCommand</code>.</li>
+<li><strong>Enums</strong>: <code>MessageType</code> (CONTENT=0, JOIN_SERVER=1, LEAVE_SERVER=2, KICK_USER=3,
+BAN_USER=4), <code>ChannelType</code> (DM_TEXT=0, SERVER_TEXT=1, CATEGORY=2).</li>
+<li><strong>Permissions</strong>: ADMIN=1, SEND_MESSAGE=2, MANAGE_ROLES=4, MANAGE_CHANNELS=8, KICK=16,
+BAN=32, MENTION_EVERYONE=64, NICKNAME_MEMBER=128, MENTION_ROLES=256.</li>
+<li><strong>Interactions</strong>: buttons and modal-style callbacks with <code>text</code> / <code>dropdown</code> / <code>input</code>
+components.</li>
+</ul>
+<h2>Known limitations</h2>
+<ul>
+<li><strong>Only faithful to the SDK you install.</strong> The emulation targets the shapes nerimity.js
+actually parses. Fields the SDK ignores are populated best-effort. Pin your SDK version.</li>
+<li><strong>Voice, typing, presence, friends</strong> exist at the gateway/event-name level but are not
+surfaced by the current SDK, so there is little bot-observable behaviour to assert on yet.
+They are wired so that when the SDK adds support, NeriTest already emits them.</li>
+<li><strong><code>server.channels</code> after a runtime <code>server:joined</code>.</strong> The SDK populates the global channel
+cache but not <code>Server.channels</code> on a runtime join (only on initial auth). NeriTest
+reproduces this faithfully - see the welcome-bot example, which reads <code>client.channels.cache</code>.</li>
+<li><strong>Virtual time is opt-in.</strong> Network I/O runs on the real event loop. Time-based bot logic is
+only virtualised if the bot reads the sandbox clock (inject <code>sandbox.now</code> /
+<code>sandbox.clock.setTimeout</code>). Bots using bare <code>Date.now()</code>/<code>setTimeout</code> run in real time.</li>
+<li><strong>CDN uploads</strong> are acknowledged with a synthetic file id; no real file storage happens.</li>
+</ul>
+
+      </article>
+      <footer class="foot">
+        <span>NeriTest docs</span>
+        <span>Built from the project markdown. Orange, as requested.</span>
+      </footer>
+    </main>
+  </div>
+  <script>
+    document.getElementById("menuToggle")?.addEventListener("click", () => {
+      document.getElementById("sidebar")?.classList.toggle("open");
+    });
+    document.querySelectorAll(".copy").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const code = btn.closest(".code-block")?.querySelector("code")?.innerText ?? "";
+        try {
+          await navigator.clipboard.writeText(code);
+          btn.textContent = "Copied";
+          setTimeout(() => (btn.textContent = "Copy"), 1400);
+        } catch {
+          btn.textContent = "Copy failed";
+        }
+      });
+    });
+  </script>
+</body>
+</html>

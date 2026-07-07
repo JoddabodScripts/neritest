@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>API reference · NeriTest</title>
+  <meta name="description" content="NeriTest - a local sandbox for testing nerimity.js bots." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">≡</button>
+    <a class="brand" href="index.html">Neri<span class="mark">Test</span></a>
+    <div class="top-links">
+      <a href="getting-started.html">Docs</a>
+      <a href="cookbook.html">Cookbook</a>
+      <a href="https://github.com/Nerimity/nerimity.js">SDK</a>
+    </div>
+  </div>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <div class="nav-title">Documentation</div>
+        <ul class="nav">
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="cookbook.html">Cookbook</a></li>
+        <li><a class="active" href="api-reference.html">API reference</a></li>
+        <li><a href="fixtures.html">Fixtures</a></li>
+        <li><a href="debugging.html">Debugging</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="migration.html">Migration</a></li>
+        <li><a href="examples.html">Examples</a></li>
+      </ul>
+      </nav>
+    </aside>
+    <main id="content">
+      
+      <article class="doc">
+        <h1>API reference</h1>
+<p>Everything below is exported from <code>neritest</code>.</p>
+<h2><code>createSandbox(options?) → Sandbox</code></h2>
+<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>interface SandboxOptions {
+  logging?: LoggerOptions;   // { console?, categories?, level?, bufferSize? }
+  startTime?: number;        // virtual clock start (ms since epoch). default: now
+  botUsername?: string;      // default &quot;TestBot&quot;
+  acceptAnyToken?: boolean;  // unknown tokens auth as the bot. default true
+  fetchShim?: boolean;       // intercept hardcoded CDN/webhook hosts. default true
+}
+</code></pre></div>
+<p>Construction is synchronous; the servers bind asynchronously.</p>
+<h2><code>Sandbox</code></h2>
+<h3>Lifecycle</h3>
+<ul>
+<li><code>ready(): Promise&lt;this&gt;</code> - resolves when gateway + API are listening.</li>
+<li><code>close(): Promise&lt;void&gt;</code> - stop servers, disconnect bots, remove the fetch shim.</li>
+<li><code>wsUrl</code> / <code>apiUrl</code> - the sandbox URLs. <code>bot</code> - the default <code>SandboxUser</code>. <code>token</code>.</li>
+</ul>
+<h3>World building</h3>
+<ul>
+<li><code>createUser({ username, ...RawUser }): SandboxUser</code></li>
+<li><code>createServer(opts): SandboxServer</code><div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>interface CreateServerOptions {
+  name: string;
+  owner?: SandboxUser;      // default: the sandbox bot (bot gets creator perms)
+  botJoins?: boolean;       // default true
+  botPermissions?: number;  // bot&#39;s role perms when it joins. default ADMIN
+  hexColor?: string;
+}
+</code></pre></div>
+</li>
+<li><code>createDM(user): SandboxChannel</code> - a DM channel between the bot and <code>user</code>.</li>
+<li><code>user(id): SandboxUser | undefined</code></li>
+</ul>
+<h3>Bot execution</h3>
+<ul>
+<li><code>createClient({ token?, messageCacheLimit? }): Promise&lt;Client&gt;</code> - a real SDK client, logged in.</li>
+<li><code>mount(client, { token? }): Promise&lt;Client&gt;</code> - repoint an existing client.</li>
+<li><code>loadBot(entryPath): Promise&lt;module&gt;</code> - import an unmodified bot; its <code>new Client()</code> connects here.</li>
+</ul>
+<h3>Time</h3>
+<ul>
+<li><code>advanceTime(amount)</code> - <code>&quot;5m&quot;</code>, <code>&quot;1h30m&quot;</code>, <code>&quot;24h&quot;</code>, or ms. Fires virtual timers.</li>
+<li><code>now(): number</code> - current virtual time. <code>clock: Clock</code> for <code>setTimeout</code>/<code>setInterval</code>.</li>
+</ul>
+<h3>Fault injection</h3>
+<ul>
+<li><code>api</code> - the <code>ApiServer</code> (see below).</li>
+<li><code>gateway</code> - the <code>Gateway</code> (see below).</li>
+</ul>
+<h3>Record / replay / fixtures / debug</h3>
+<ul>
+<li><code>record(file?): Recording</code> - <code>{ stop(): Session, save(file?): Session }</code>.</li>
+<li><code>replay(sessionOrFile, { realtime?, speed? }): Promise&lt;void&gt;</code></li>
+<li><code>loadFixture(nameOrFn)</code> - <code>&quot;basic&quot;</code>, <code>&quot;moderation&quot;</code>, <code>&quot;large-server&quot;</code>, or a builder.</li>
+<li><code>debug</code> - the <code>Debugger</code>. <code>logs</code> - the <code>Logger</code>. <code>store</code> - the raw <code>Store</code> (escape hatch).</li>
+</ul>
+<h2>Facade objects</h2>
+<h3><code>SandboxServer</code></h3>
+<p><code>name</code>, <code>defaultRoleId</code>, <code>ownerId</code>, <code>defaultChannel</code>, <code>channels</code>, <code>roles</code>, <code>defaultRole</code>, <code>members</code></p>
+<ul>
+<li><code>createChannel({ name, type?, category?, permissions? }): SandboxChannel</code></li>
+<li><code>createCategory(name): SandboxChannel</code></li>
+<li><code>createRole({ name?, permissions?, hexColor?, hideRole? }): SandboxRole</code></li>
+<li><code>addMember(user, { nickname?, roles? })</code></li>
+<li><code>setMemberRoles(user, roles)</code> / <code>giveRole(user, role)</code></li>
+<li><code>member(user): SandboxMember | undefined</code> / <code>memberPermissions(user): number</code></li>
+<li><code>isBanned(user): boolean</code> / <code>removeMember(user)</code></li>
+<li><code>addCustomEmoji(name, { gif?, id? })</code> / <code>update({ name?, avatar?, banner?, hexColor? })</code></li>
+</ul>
+<h3><code>SandboxChannel</code></h3>
+<p><code>id</code>, <code>name</code>, <code>type</code>, <code>serverId</code>, <code>messages</code>, <code>lastMessage</code></p>
+<ul>
+<li><code>send(user, input): SandboxMessage</code> - <code>input</code> is a string or:<div class="code-block"><div class="code-head"><span class="code-lang">TypeScript</span><button class="copy" type="button" aria-label="Copy code">Copy</button></div><pre><code>interface SendOptions {
+  content?: string;
+  html?: string;         // → message.htmlEmbed (Nerimity HTML support)
+  htmlEmbed?: string;    // alias
+  embed?: RawEmbed;
+  buttons?: { id: string; label: string; alert?: boolean }[];
+  attachments?: { mime?; path?; width?; height?; duration? }[];
+  silent?: boolean;
+  replyTo?: SandboxMessage | string;
+  mentionReplies?: boolean;
+  type?: MessageType;
+}
+</code></pre></div>
+</li>
+<li><code>sendHtml(user, html): SandboxMessage</code></li>
+<li><code>startTyping(user)</code> - fires <code>channel:typing</code></li>
+<li><code>update({ name?, permissions?, categoryId? })</code> / <code>delete()</code></li>
+</ul>
+<h3><code>SandboxMessage</code></h3>
+<p><code>id</code>, <code>content</code>, <code>htmlEmbed</code>, <code>authorId</code>, <code>channelId</code>, <code>reactions</code>, <code>buttons</code>, <code>editedAt</code>,
+<code>deleted</code>, <code>toRaw()</code></p>
+<ul>
+<li><code>react(user, emoji)</code> / <code>removeReaction(user, emoji)</code> - emoji is a string or <code>{ name, emojiId?, gif? }</code></li>
+<li><code>clickButton(user, buttonId, { type?, data? })</code> - fires <code>messageButtonClick</code></li>
+<li><code>edit({ content?, html?, buttons? })</code> - fires <code>messageUpdate</code></li>
+<li><code>delete()</code> - fires <code>messageDelete</code></li>
+</ul>
+<h3><code>SandboxUser</code></h3>
+<p><code>id</code>, <code>username</code>, <code>tag</code>, <code>isBot</code>, <code>toString()</code> (→ <code>[@:id]</code> mention)</p>
+<ul>
+<li><code>setPresence({ status?, custom?, activity? })</code></li>
+<li><code>wasKicked(server?): boolean</code> / <code>wasBanned(server?): boolean</code></li>
+</ul>
+<h3><code>SandboxMember</code></h3>
+<p><code>nickname</code>, <code>roles: SandboxRole[]</code>, <code>permissions: number</code></p>
+<ul>
+<li><code>hasRole(role)</code> / <code>hasPermission(bit)</code></li>
+</ul>
+<h3><code>SandboxRole</code></h3>
+<p><code>id</code>, <code>name</code>, <code>permissions</code> - <code>update({...})</code> / <code>delete()</code></p>
+<h2><code>ApiServer</code> (<code>sandbox.api</code>)</h2>
+<p>Fault injection: <code>rateLimit({ requests?, retryAfterMs? })</code>, <code>failNext(status, body)</code>,
+<code>setLatency(ms)</code>, <code>hangNext(ms?)</code>.
+Direct requests (as the bot): <code>get(path)</code>, <code>post(path, body)</code>, <code>patch(path, body)</code>,
+<code>delete(path)</code>, <code>request(method, path, body?)</code> → <code>{ status, body }</code>.</p>
+<h2><code>Gateway</code> (<code>sandbox.gateway</code>)</h2>
+<p><code>disconnect({ close? })</code>, <code>setLatency(ms)</code>, <code>setPacketLoss(rate)</code>, <code>setDuplication(rate)</code>,
+<code>rejectNextAuth()</code>, <code>connectionCount</code>, <code>emitRaw(event, payload)</code>.</p>
+<h2><code>expect(value)</code></h2>
+<p><code>toBe</code>, <code>toEqual</code>, <code>toContain</code>, <code>toContainEqual</code>, <code>toHaveLength</code>, <code>toBeTruthy</code>, <code>toBeFalsy</code>,
+<code>toBeDefined</code>, <code>toBeUndefined</code>, <code>toBeNull</code>, <code>toBeGreaterThan</code>, <code>toBeLessThan</code>, <code>toMatch</code>,
+<code>toThrow</code>, <code>toContainHtml</code>, <code>.not</code>, <code>.resolves</code>, <code>.rejects</code>.</p>
+<h2>Constants &amp; helpers</h2>
+<p><code>RolePermissions</code>, <code>permissions(&quot;KICK&quot;, &quot;BAN&quot;)</code>, <code>hasBit</code>, <code>addBit</code>, <code>removeBit</code>,
+<code>MessageType</code>, <code>ChannelType</code>, <code>ServerToClient</code>, <code>ClientToServer</code>, <code>Clock</code>, <code>parseDuration</code>,
+<code>Recorder</code>, <code>Logger</code>, <code>Debugger</code>, and all <code>Raw*</code> types.</p>
+
+      </article>
+      <footer class="foot">
+        <span>NeriTest docs</span>
+        <span>Built from the project markdown. Orange, as requested.</span>
+      </footer>
+    </main>
+  </div>
+  <script>
+    document.getElementById("menuToggle")?.addEventListener("click", () => {
+      document.getElementById("sidebar")?.classList.toggle("open");
+    });
+    document.querySelectorAll(".copy").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const code = btn.closest(".code-block")?.querySelector("code")?.innerText ?? "";
+        try {
+          await navigator.clipboard.writeText(code);
+          btn.textContent = "Copied";
+          setTimeout(() => (btn.textContent = "Copy"), 1400);
+        } catch {
+          btn.textContent = "Copy failed";
+        }
+      });
+    });
+  </script>
+</body>
+</html>
