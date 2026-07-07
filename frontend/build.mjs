@@ -195,7 +195,7 @@ function page({ slug, title, contentHtml, hero }) {
       </article>
       <footer class="foot">
         <span>NeriTest docs</span>
-        <span>Built from the project markdown. Dark by default now.</span>
+        <span><a href="${GITHUB}">nerimity.js</a></span>
       </footer>
     </main>
   </div>
