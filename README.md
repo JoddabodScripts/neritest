@@ -1,5 +1,8 @@
 # NeriTest
 
+[![npm version](https://img.shields.io/npm/v/neritest-js.svg)](https://www.npmjs.com/package/neritest-js)
+[![license](https://img.shields.io/npm/l/neritest-js.svg)](LICENSE)
+
 A local sandbox that emulates the [Nerimity](https://nerimity.com) runtime so you can
 develop and test [`@nerimity/nerimity.js`](https://github.com/Nerimity/nerimity.js) bots
 without ever touching production.

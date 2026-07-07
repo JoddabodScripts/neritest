@@ -4,6 +4,14 @@
   "description": "A local sandbox that emulates the Nerimity runtime for testing nerimity.js bots without touching production.",
   "author": "Joud j",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JoddabodScripts/neritest.git"
+  },
+  "homepage": "https://github.com/JoddabodScripts/neritest#readme",
+  "bugs": {
+    "url": "https://github.com/JoddabodScripts/neritest/issues"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
