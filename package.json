@@ -1,6 +1,6 @@
 {
   "name": "neritest-js",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "A local sandbox that emulates the Nerimity runtime for testing nerimity.js bots without touching production.",
   "author": "Joud j",
   "license": "MIT",
