@@ -147,6 +147,13 @@ channel.<span class="c-fn">send</span>(alice, <span class="c-str">"!ping"</span>
   </header>`;
 }
 
+// Inline, blocking, and tiny: promotes a stored "light" preference before first
+// paint. Dark needs no script since it's the CSS default (:root, no attribute).
+const THEME_INIT_SCRIPT = `(function(){try{if(localStorage.getItem("neritest-theme")==="light"){document.documentElement.setAttribute("data-theme","light");}}catch(e){}})();`;
+
+const SUN_ICON = `<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>`;
+const MOON_ICON = `<svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+
 function page({ slug, title, contentHtml, hero }) {
   const isIndex = slug === "index";
   return `<!doctype html>
@@ -156,6 +163,7 @@ function page({ slug, title, contentHtml, hero }) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title} · NeriTest</title>
   <meta name="description" content="NeriTest - a local sandbox for testing nerimity.js bots." />
+  <script>${THEME_INIT_SCRIPT}</script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -168,6 +176,10 @@ function page({ slug, title, contentHtml, hero }) {
       <a href="cookbook.html">Cookbook</a>
       <a href="${GITHUB}">SDK</a>
     </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle color theme" title="Toggle color theme">
+      ${SUN_ICON}
+      ${MOON_ICON}
+    </button>
   </div>
   <div class="layout">
     <aside class="sidebar" id="sidebar">
@@ -183,13 +195,24 @@ function page({ slug, title, contentHtml, hero }) {
       </article>
       <footer class="foot">
         <span>NeriTest docs</span>
-        <span>Built from the project markdown. Orange, as requested.</span>
+        <span>Built from the project markdown. Dark by default now.</span>
       </footer>
     </main>
   </div>
   <script>
     document.getElementById("menuToggle")?.addEventListener("click", () => {
       document.getElementById("sidebar")?.classList.toggle("open");
+    });
+    document.getElementById("themeToggle")?.addEventListener("click", () => {
+      const root = document.documentElement;
+      const isLight = root.getAttribute("data-theme") === "light";
+      if (isLight) {
+        root.removeAttribute("data-theme");
+        try { localStorage.setItem("neritest-theme", "dark"); } catch (e) {}
+      } else {
+        root.setAttribute("data-theme", "light");
+        try { localStorage.setItem("neritest-theme", "light"); } catch (e) {}
+      }
     });
     document.querySelectorAll(".copy").forEach((btn) => {
       btn.addEventListener("click", async () => {
