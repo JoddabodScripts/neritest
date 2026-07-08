@@ -12,7 +12,7 @@ your bot's real `Client` at them. Your bot connects for real, authenticates for 
 sends real REST requests. At the wire level there is nothing to distinguish the sandbox
 from `wss://nerimity.com`, so behaviour you observe here matches a live server closely.
 
-> If it works in NeriTest, it should behave the same way on a real Nerimity server.
+> If it works in NeriTest, it should behave the same way on Nerimity.
 
 ---
 
